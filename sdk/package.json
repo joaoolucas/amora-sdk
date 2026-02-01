@@ -1,0 +1,42 @@
+{
+  "name": "@amora/sdk",
+  "version": "0.1.0",
+  "description": "Stealth Addresses SDK for Starknet",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "starknet",
+    "stealth",
+    "privacy",
+    "crypto"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@noble/curves": "^1.4.0",
+    "@scure/starknet": "^1.0.0",
+    "starknet": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
+}
