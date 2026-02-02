@@ -10,6 +10,8 @@ import {
   CallData,
   type Call,
   type InvokeFunctionResponse,
+  type DeployAccountContractPayload,
+  type DeployContractResponse,
 } from "starknet";
 import type { MetaAddress } from "./meta-address";
 import type { StealthKeys } from "./keys";
@@ -17,9 +19,42 @@ import type { Announcement, GenerateStealthAddressResult } from "./stealth";
 import {
   generateStealthAddress,
   scanAnnouncements,
+  computeStealthContractAddress,
   type StealthPayment,
 } from "./stealth";
 import { parseMetaAddress, encodeMetaAddressFromPubKeys } from "./meta-address";
+import { derivePublicKey } from "./crypto";
+
+/**
+ * Minimal ERC20 ABI for balance queries and transfers
+ */
+const ERC20_ABI = [
+  {
+    name: "balanceOf",
+    type: "function",
+    inputs: [
+      {
+        name: "account",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+    ],
+    outputs: [{ type: "core::integer::u256" }],
+    state_mutability: "view",
+  },
+  {
+    name: "transfer",
+    type: "function",
+    inputs: [
+      {
+        name: "recipient",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      { name: "amount", type: "core::integer::u256" },
+    ],
+    outputs: [{ type: "bool" }],
+    state_mutability: "external",
+  },
+] as const;
 
 /**
  * ABI for the Amora registry contract
@@ -103,16 +138,17 @@ export class Amora {
     account: Account,
     keys: StealthKeys
   ): Promise<InvokeFunctionResponse> {
-    const contract = new Contract(
-      AMORA_ABI,
-      this.amoraContract.address,
-      account
-    );
+    // Format as hex strings for proper felt252 encoding
+    const spendingHex = "0x" + keys.spendingKey.publicKey.toString(16);
+    const viewingHex = "0x" + keys.viewingKey.publicKey.toString(16);
 
-    return contract.invoke("register_keys", [
-      keys.spendingKey.publicKey.toString(),
-      keys.viewingKey.publicKey.toString(),
-    ]);
+    const call: Call = {
+      contractAddress: this.amoraContract.address,
+      entrypoint: "register_keys",
+      calldata: [spendingHex, viewingHex],
+    };
+
+    return account.execute([call]);
   }
 
   /**
@@ -327,21 +363,116 @@ export class Amora {
     tokenAddress: string,
     amount: bigint | "all"
   ): Promise<InvokeFunctionResponse> {
-    // Create an account instance with the stealth private key
+    // 1. Derive public key and compute stealth address
+    const stealthPubKey = derivePublicKey(stealthPrivateKey);
+    const stealthAddress = computeStealthContractAddress(
+      stealthPubKey,
+      this.accountClassHash
+    );
+
+    // 2. Create account instance with the correct address
     const stealthAccount = new Account(
       this.provider,
-      "0x0", // Address will be computed
+      stealthAddress,
       stealthPrivateKey.toString()
     );
 
-    // TODO: Implement full deploy and withdraw logic
-    // This requires:
-    // 1. Computing the stealth address from the private key
-    // 2. Checking if the account is deployed
-    // 3. If not deployed, deploying it (using DEPLOY_ACCOUNT transaction)
-    // 4. Executing the withdrawal transfer
+    // 3. Check if the account is already deployed
+    const isDeployed = await this.isAccountDeployed(stealthAddress);
 
-    throw new Error("deployAndWithdraw not yet implemented");
+    // 4. If not deployed, deploy first
+    if (!isDeployed) {
+      await this.deployStealthAccount(stealthPrivateKey, stealthPubKey);
+    }
+
+    // 5. Determine the withdrawal amount
+    let withdrawAmount: bigint;
+    if (amount === "all") {
+      // Get the token balance
+      const tokenContract = new Contract(
+        ERC20_ABI,
+        tokenAddress,
+        this.provider
+      );
+      const balance = await tokenContract.call("balanceOf", [stealthAddress]);
+      // Handle u256 format (low, high)
+      if (Array.isArray(balance)) {
+        withdrawAmount = BigInt(balance[0]) + (BigInt(balance[1]) << 128n);
+      } else if (typeof balance === "object" && "low" in balance) {
+        withdrawAmount =
+          BigInt((balance as { low: bigint; high: bigint }).low) +
+          (BigInt((balance as { low: bigint; high: bigint }).high) << 128n);
+      } else {
+        withdrawAmount = BigInt(balance as bigint);
+      }
+    } else {
+      withdrawAmount = amount;
+    }
+
+    // 6. Execute the withdrawal transfer
+    const transferCall: Call = {
+      contractAddress: tokenAddress,
+      entrypoint: "transfer",
+      calldata: CallData.compile({
+        recipient: destinationAddress,
+        amount: {
+          low: withdrawAmount & ((1n << 128n) - 1n),
+          high: withdrawAmount >> 128n,
+        },
+      }),
+    };
+
+    return stealthAccount.execute([transferCall]);
+  }
+
+  /**
+   * Check if an account is deployed at the given address
+   * @param address - The address to check
+   * @returns True if deployed
+   */
+  private async isAccountDeployed(address: string): Promise<boolean> {
+    try {
+      const classHash = await this.provider.getClassHashAt(address);
+      return classHash !== undefined && classHash !== "0x0";
+    } catch {
+      // If we get an error, the account is not deployed
+      return false;
+    }
+  }
+
+  /**
+   * Deploy a stealth account
+   * @param privateKey - The stealth private key
+   * @param publicKey - The stealth public key
+   * @returns The deploy response
+   */
+  async deployStealthAccount(
+    privateKey: bigint,
+    publicKey?: bigint
+  ): Promise<DeployContractResponse> {
+    const pubKey = publicKey ?? derivePublicKey(privateKey);
+    const stealthAddress = computeStealthContractAddress(
+      pubKey,
+      this.accountClassHash
+    );
+
+    // Create account instance for deployment
+    const stealthAccount = new Account(
+      this.provider,
+      stealthAddress,
+      privateKey.toString()
+    );
+
+    // Deploy account payload
+    const payload: DeployAccountContractPayload = {
+      classHash: this.accountClassHash,
+      constructorCalldata: CallData.compile({
+        public_key: pubKey.toString(),
+      }),
+      addressSalt: pubKey.toString(),
+    };
+
+    return stealthAccount.deployAccount(payload);
   }
 
   /**

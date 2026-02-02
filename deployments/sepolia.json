@@ -1,0 +1,19 @@
+{
+  "network": "sepolia",
+  "deployedAt": "2026-02-01",
+  "contracts": {
+    "amora": {
+      "address": "0x0388dfa21daf46e8d230f02df0bee78e42f93b33920db171d0f96d9d30f7a7b2",
+      "classHash": "0x05dd7d0ba7de1b6209f4865e9d236d82959a8e4bc1eee34eaf09aa55ff9b2ab5",
+      "casmHash": "0x033d83cb17ef487e9d896c890c2b4aace7e3defe323878142bd808c3c3da3b19",
+      "transactionHash": "0x07a24053221badfeea237873af88c2d7377c0abcf436bbe9333c1d7a5a5d40aa",
+      "explorer": "https://sepolia.starkscan.co/contract/0x0388dfa21daf46e8d230f02df0bee78e42f93b33920db171d0f96d9d30f7a7b2"
+    },
+    "stealthAccount": {
+      "classHash": "0x0155bf2341cbc5a8e612ece29cc87476d7a0e102ea197a4583833a5b8a2fa76a",
+      "casmHash": "0x02213f27c3e90be365b269e222ab6cfc8626a01b8262a257a505e4147bf5655f",
+      "note": "Class hash only - stealth accounts are deployed counterfactually per payment"
+    }
+  },
+  "rpc": "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/demo"
+}

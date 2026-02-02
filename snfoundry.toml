@@ -1,0 +1,4 @@
+[sncast.sepolia]
+url = "https://starknet-sepolia.core.chainstack.com/572113f9e0575edfa160e9940828d86b"
+account = "deployer"
+accounts-file = "accounts.json"

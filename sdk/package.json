@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "files": [
@@ -19,6 +19,7 @@
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:sepolia": "tsx scripts/test-sepolia.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -31,11 +32,12 @@
   "dependencies": {
     "@noble/curves": "^1.4.0",
     "@scure/starknet": "^1.0.0",
-    "starknet": "^6.0.0"
+    "starknet": "^6.24.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
   }

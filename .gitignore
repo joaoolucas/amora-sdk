@@ -16,3 +16,6 @@ dist/
 # Environment
 .env
 .env.local
+
+# Deployment secrets (contains private keys)
+accounts.json
