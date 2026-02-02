@@ -1,168 +1,213 @@
-# Amora: Stealth Addresses SDK & Registry for Starknet
+# Amora SDK
 
-Amora implements ERC-5564/ERC-6538-style stealth addresses adapted for Starknet's STARK curve and native account abstraction. Users register a meta-address once, then anyone can generate unique one-time stealth addresses without interaction.
+TypeScript SDK for stealth addresses on Starknet. Send and receive private payments without revealing recipient identity.
 
-## Features
+## Installation
 
-- **Privacy-preserving payments**: Send tokens to stealth addresses that can only be identified by the recipient
-- **STARK curve cryptography**: Native support for Starknet's STARK curve with Poseidon hashing
-- **Account abstraction**: SNIP-6 compliant stealth accounts with counterfactual deployment
-- **Efficient scanning**: View tags enable fast filtering of announcements
-- **Token support**: ETH and ERC20 tokens
-
-## Project Structure
-
-```
-amora/
-├── contracts/                      # Cairo smart contracts
-│   ├── src/
-│   │   ├── lib.cairo
-│   │   ├── amora.cairo             # Combined registry + announcer
-│   │   ├── stealth_account.cairo   # SNIP-6 stealth account (OZ-based)
-│   │   └── interface.cairo         # Public interfaces
-│   └── tests/
-│
-├── sdk/                            # TypeScript SDK
-│   ├── src/
-│   │   ├── index.ts
-│   │   ├── keys.ts                 # Key generation
-│   │   ├── meta-address.ts         # Encoding/parsing
-│   │   ├── stealth.ts              # Address generation & scanning
-│   │   ├── crypto.ts               # STARK curve ECDH
-│   │   └── contracts.ts            # Contract wrappers
-│   └── tests/
-│
-└── README.md
+```bash
+pnpm add @amora/sdk starknet
 ```
 
 ## Quick Start
 
-### Prerequisites
+```typescript
+import { Amora, generateKeys, encodeMetaAddress, MAINNET_ADDRESSES } from '@amora/sdk';
+import { RpcProvider, Account } from 'starknet';
 
-- [Scarb](https://docs.swmansion.com/scarb/) (Cairo package manager)
-- [Node.js](https://nodejs.org/) 18+ and [pnpm](https://pnpm.io/)
-- [snforge](https://github.com/foundry-rs/starknet-foundry) (for testing)
+// Initialize
+const provider = new RpcProvider({ nodeUrl: 'YOUR_RPC_URL' });
+const amora = new Amora({
+  provider,
+  amoraAddress: MAINNET_ADDRESSES.amoraRegistry,
+  accountClassHash: MAINNET_ADDRESSES.stealthAccountClassHash,
+});
 
-### Installation
+// Generate stealth keys (recipient)
+const keys = generateKeys();
+const metaAddress = encodeMetaAddress(keys);
+// Share: "st:starknet:0x123...abc:0x456...def"
+
+// Send privately (sender)
+const stealth = amora.generateStealthAddress(metaAddress);
+await amora.send(account, ETH_ADDRESS, amount, stealth);
+
+// Scan for payments (recipient)
+const payments = await amora.scan(keys, fromBlock);
+for (const payment of payments) {
+  await amora.deployAndWithdraw(payment.stealthPrivateKey, destination, ETH_ADDRESS, 'all');
+}
+```
+
+## Features
+
+- **Private payments** - Send tokens without revealing recipient address on-chain
+- **One-time addresses** - Each payment uses a unique stealth address
+- **Efficient scanning** - View tags enable 256x faster payment detection
+- **Account abstraction** - SNIP-6 compliant smart contract wallets
+- **TypeScript** - Full type definitions included
+
+## Deployed Contracts
+
+### Mainnet
+
+```typescript
+import { MAINNET_ADDRESSES } from '@amora/sdk';
+
+// MAINNET_ADDRESSES.amoraRegistry
+// → 0x067e3fae136321be23894cc3a181c92171a7b991d853fa5e3432ec7dddeb955d
+
+// MAINNET_ADDRESSES.stealthAccountClassHash
+// → 0x0155bf2341cbc5a8e612ece29cc87476d7a0e102ea197a4583833a5b8a2fa76a
+```
+
+### Sepolia Testnet
+
+```typescript
+import { SEPOLIA_ADDRESSES } from '@amora/sdk';
+
+// SEPOLIA_ADDRESSES.amoraRegistry
+// → 0x0388dfa21daf46e8d230f02df0bee78e42f93b33920db171d0f96d9d30f7a7b2
+
+// SEPOLIA_ADDRESSES.stealthAccountClassHash
+// → 0x0155bf2341cbc5a8e612ece29cc87476d7a0e102ea197a4583833a5b8a2fa76a
+```
+
+## Usage
+
+### Recipient Setup
+
+```typescript
+import { generateKeys, encodeMetaAddress } from '@amora/sdk';
+
+// Generate keys
+const keys = generateKeys();
+
+// Store securely
+console.log('Spending key:', keys.spendingKey.privateKey.toString(16));
+console.log('Viewing key:', keys.viewingKey.privateKey.toString(16));
+
+// Get shareable address
+const metaAddress = encodeMetaAddress(keys);
+// → "st:starknet:0x123...abc:0x456...def"
+
+// Register on-chain
+await amora.register(account, keys);
+```
+
+### Sending Tokens
+
+```typescript
+// Fetch or parse recipient's meta-address
+const meta = await amora.getMetaAddress(recipientAddress);
+// or: parseMetaAddress('st:starknet:...')
+
+// Generate stealth address
+const stealth = amora.generateStealthAddress(meta);
+
+// Send (transfer + announce in one tx)
+await amora.send(account, tokenAddress, amount, stealth);
+```
+
+### Receiving Tokens
+
+```typescript
+// Scan blockchain for payments
+const payments = await amora.scan(keys, fromBlock);
+
+// Withdraw each payment
+for (const payment of payments) {
+  await amora.deployAndWithdraw(
+    payment.stealthPrivateKey,
+    destinationAddress,
+    tokenAddress,
+    'all'
+  );
+}
+```
+
+### Key Management
+
+```typescript
+// Export for storage
+const exported = {
+  spending: keys.spendingKey.privateKey.toString(16),
+  viewing: keys.viewingKey.privateKey.toString(16),
+};
+
+// Restore from storage
+import { keysFromPrivateKeys } from '@amora/sdk';
+const keys = keysFromPrivateKeys(
+  BigInt('0x' + exported.spending),
+  BigInt('0x' + exported.viewing)
+);
+```
+
+## API Reference
+
+### Main Class
+
+```typescript
+new Amora({ provider, amoraAddress, accountClassHash })
+
+amora.register(account, keys)              // Register meta-address
+amora.getMetaAddress(address)              // Fetch meta-address
+amora.generateStealthAddress(meta)         // Generate stealth address
+amora.send(account, token, amount, stealth) // Send tokens
+amora.scan(keys, fromBlock)                // Scan for payments
+amora.deployAndWithdraw(key, dest, token, amount) // Withdraw funds
+```
+
+### Key Functions
+
+```typescript
+generateKeys()                  // Generate new stealth keys
+keysFromPrivateKeys(s, v)       // Restore from private keys
+encodeMetaAddress(keys)         // Encode as string
+parseMetaAddress(str)           // Parse from string
+```
+
+### Low-Level Functions
+
+```typescript
+generateStealthAddress(meta, classHash)
+computeStealthPrivateKey(spendingKey, sharedSecret)
+computeStealthContractAddress(pubKey, classHash)
+scanAnnouncements(announcements, viewingKey, spendingPubKey, spendingKey, classHash)
+```
+
+## Documentation
+
+Full documentation available at [/docs](./docs/README.md):
+
+- [Getting Started](./docs/getting-started.md)
+- [SDK Reference](./docs/sdk-reference.md)
+- [Protocol](./docs/protocol.md)
+- [Contracts](./docs/contracts.md)
+
+## Development
 
 ```bash
-# Install SDK dependencies
+# Install dependencies
 pnpm install
+
+# Build SDK
+cd sdk && pnpm build
+
+# Run tests
+pnpm test
 
 # Build contracts
 cd contracts && scarb build
 
-# Run tests
-snforge test           # Cairo tests
-pnpm test             # TypeScript tests
+# Test contracts
+snforge test
 ```
 
-### SDK Usage
+## Links
 
-```typescript
-import { Amora, generateKeys, encodeMetaAddress, parseMetaAddress } from '@amora/sdk';
-
-// Initialize SDK
-const amora = new Amora({ provider, amoraAddress, accountClassHash });
-
-// === RECIPIENT: One-time setup ===
-const keys = generateKeys();
-const metaAddress = encodeMetaAddress(keys);
-await amora.register(account, keys);
-// Share metaAddress: "st:starknet:0x123...abc:0x456...def"
-
-// === SENDER: Send to stealth address ===
-const recipientMeta = await amora.getMetaAddress(recipientAddress);
-const { stealthAddress, ephemeralPubKey, viewTag } = amora.generateStealthAddress(recipientMeta);
-await amora.send(account, ETH_ADDRESS, amount, { stealthAddress, ephemeralPubKey, viewTag });
-
-// === RECIPIENT: Scan for payments ===
-const payments = await amora.scan(keys, fromBlock);
-for (const payment of payments) {
-    // Deploy stealth account and withdraw
-    await amora.deployAndWithdraw(payment.stealthPrivateKey, destinationAddress, tokenAddress, amount);
-}
-```
-
-## Protocol Flow
-
-```
-1. REGISTRATION (one-time)
-   Recipient generates spending + viewing keypairs
-   Registers meta-address (K_spend, K_view) to Registry
-
-2. SENDING (per payment)
-   Sender:
-   1. Fetches recipient's meta-address from Registry
-   2. Generates ephemeral keypair (r, R)
-   3. Computes shared secret: s = r × K_view
-   4. Computes stealth pubkey: P = K_spend + hash(s)×G
-   5. Derives stealth address from P
-   6. Deposits tokens to stealth address
-   7. Publishes announcement: (R, view_tag, metadata)
-
-3. SCANNING (recipient)
-   For each announcement with ephemeral pubkey R:
-   1. Computes shared secret: s = k_view × R
-   2. Quick filter: check view_tag matches hash(s)[0]
-   3. Computes expected stealth address
-   4. If match: computes spending key p = k_spend + hash(s)
-
-4. WITHDRAWAL
-   Recipient deploys stealth account (counterfactual)
-   Signs transaction with stealth private key
-   Withdraws funds to any address
-```
-
-## Cairo Contracts
-
-### Amora Registry (`amora.cairo`)
-
-Combined registry and announcer contract:
-
-```cairo
-#[starknet::interface]
-pub trait IAmora<TState> {
-    fn register_keys(ref self: TState, spending_pubkey: felt252, viewing_pubkey: felt252);
-    fn get_meta_address(self: @TState, registrant: ContractAddress) -> (felt252, felt252);
-    fn is_registered(self: @TState, registrant: ContractAddress) -> bool;
-    fn announce(ref self: TState, stealth_address: ContractAddress,
-                ephemeral_pubkey: felt252, view_tag: u8, metadata: Array<felt252>);
-}
-```
-
-### Stealth Account (`stealth_account.cairo`)
-
-SNIP-6 compliant account using OpenZeppelin AccountComponent:
-
-```cairo
-#[starknet::contract(account)]
-pub mod StealthAccount {
-    // Uses OpenZeppelin AccountComponent for SNIP-6 compliance
-    // Constructor takes stealth public key
-}
-```
-
-## SDK Exports
-
-```typescript
-export {
-    Amora,                      // Main SDK class
-    generateKeys,               // Generate spending + viewing keypairs
-    encodeMetaAddress,          // Encode to "st:starknet:..." format
-    parseMetaAddress,           // Parse from string
-    generateStealthAddress,     // Compute stealth address for recipient
-    computeStealthPrivateKey,   // Derive spending key for stealth address
-    SCHEME_ID_STARK,           // Scheme identifier for STARK curve
-};
-```
-
-## Cryptographic Details
-
-- **Curve**: STARK curve (native to Starknet)
-- **Hash function**: Poseidon (ZK-friendly)
-- **Shared secret**: ECDH with x-coordinate output
-- **View tag**: First byte of Poseidon hash of shared secret
+- [GitHub](https://github.com/joaoolucas/amora-sdk)
+- [Mainnet Contract](https://starkscan.co/contract/0x067e3fae136321be23894cc3a181c92171a7b991d853fa5e3432ec7dddeb955d)
+- [Sepolia Contract](https://sepolia.starkscan.co/contract/0x0388dfa21daf46e8d230f02df0bee78e42f93b33920db171d0f96d9d30f7a7b2)
 
 ## License
 
