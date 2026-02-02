@@ -4,7 +4,10 @@ target/
 
 # Node
 node_modules/
-dist/
+
+# Ignore dist except for sdk (needed for GitHub installs)
+/dist/
+!/sdk/dist/
 
 # IDE
 .idea/
