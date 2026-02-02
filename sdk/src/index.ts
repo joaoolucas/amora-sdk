@@ -79,3 +79,14 @@ export {
   poseidonHash,
   computeViewTag,
 } from "./crypto";
+
+// Deployed contract addresses
+export const MAINNET_ADDRESSES = {
+  amoraRegistry: "0x067e3fae136321be23894cc3a181c92171a7b991d853fa5e3432ec7dddeb955d",
+  stealthAccountClassHash: "0x0155bf2341cbc5a8e612ece29cc87476d7a0e102ea197a4583833a5b8a2fa76a",
+} as const;
+
+export const SEPOLIA_ADDRESSES = {
+  amoraRegistry: "0x0388dfa21daf46e8d230f02df0bee78e42f93b33920db171d0f96d9d30f7a7b2",
+  stealthAccountClassHash: "0x0155bf2341cbc5a8e612ece29cc87476d7a0e102ea197a4583833a5b8a2fa76a",
+} as const;

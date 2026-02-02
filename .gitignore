@@ -19,3 +19,4 @@ dist/
 
 # Deployment secrets (contains private keys)
 accounts.json
+mainnet-account.json

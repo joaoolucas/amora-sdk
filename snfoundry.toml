@@ -2,3 +2,8 @@
 url = "https://starknet-sepolia.core.chainstack.com/572113f9e0575edfa160e9940828d86b"
 account = "deployer"
 accounts-file = "accounts.json"
+
+[sncast.mainnet]
+url = "https://starknet-mainnet.core.chainstack.com/195e2a31d0ad570309d7adff43f9cdc5"
+account = "deployer-mainnet"
+accounts-file = "/Users/joao/.starknet_accounts/starknet_open_zeppelin_accounts.json"
