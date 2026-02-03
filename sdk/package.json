@@ -1,6 +1,6 @@
 {
   "name": "amora-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Stealth Addresses SDK for Starknet",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -13,8 +13,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joaoolucas/amora-sdk.git"
+  },
+  "homepage": "https://github.com/joaoolucas/amora-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/joaoolucas/amora-sdk/issues"
+  },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "test": "vitest run",
