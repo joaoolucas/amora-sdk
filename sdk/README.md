@@ -1,5 +1,9 @@
 # amora-sdk
 
+[![npm version](https://img.shields.io/npm/v/amora-sdk.svg)](https://www.npmjs.com/package/amora-sdk)
+[![npm downloads](https://img.shields.io/npm/dm/amora-sdk.svg)](https://www.npmjs.com/package/amora-sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Stealth addresses SDK for Starknet. Send and receive private payments without revealing recipient identity.
 
 ## Installation
