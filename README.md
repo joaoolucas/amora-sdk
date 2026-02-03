@@ -5,13 +5,13 @@ TypeScript SDK for stealth addresses on Starknet. Send and receive private payme
 ## Installation
 
 ```bash
-pnpm add @amora/sdk starknet
+pnpm add amora-sdk starknet
 ```
 
 ## Quick Start
 
 ```typescript
-import { Amora, generateKeys, encodeMetaAddress, MAINNET_ADDRESSES } from '@amora/sdk';
+import { Amora, generateKeys, encodeMetaAddress, MAINNET_ADDRESSES } from 'amora-sdk';
 import { RpcProvider, Account } from 'starknet';
 
 // Initialize
@@ -51,7 +51,7 @@ for (const payment of payments) {
 ### Mainnet
 
 ```typescript
-import { MAINNET_ADDRESSES } from '@amora/sdk';
+import { MAINNET_ADDRESSES } from 'amora-sdk';
 
 // MAINNET_ADDRESSES.amoraRegistry
 // → 0x067e3fae136321be23894cc3a181c92171a7b991d853fa5e3432ec7dddeb955d
@@ -63,7 +63,7 @@ import { MAINNET_ADDRESSES } from '@amora/sdk';
 ### Sepolia Testnet
 
 ```typescript
-import { SEPOLIA_ADDRESSES } from '@amora/sdk';
+import { SEPOLIA_ADDRESSES } from 'amora-sdk';
 
 // SEPOLIA_ADDRESSES.amoraRegistry
 // → 0x0388dfa21daf46e8d230f02df0bee78e42f93b33920db171d0f96d9d30f7a7b2
@@ -77,7 +77,7 @@ import { SEPOLIA_ADDRESSES } from '@amora/sdk';
 ### Recipient Setup
 
 ```typescript
-import { generateKeys, encodeMetaAddress } from '@amora/sdk';
+import { generateKeys, encodeMetaAddress } from 'amora-sdk';
 
 // Generate keys
 const keys = generateKeys();
@@ -135,7 +135,7 @@ const exported = {
 };
 
 // Restore from storage
-import { keysFromPrivateKeys } from '@amora/sdk';
+import { keysFromPrivateKeys } from 'amora-sdk';
 const keys = keysFromPrivateKeys(
   BigInt('0x' + exported.spending),
   BigInt('0x' + exported.viewing)

@@ -23,7 +23,7 @@ Amora implements ERC-5564/ERC-6538-style stealth addresses adapted for Starknet'
 ## Quick Example
 
 ```typescript
-import { Amora, generateKeys, encodeMetaAddress } from '@amora/sdk';
+import { Amora, generateKeys, encodeMetaAddress } from 'amora-sdk';
 import { RpcProvider } from 'starknet';
 
 // Initialize
@@ -66,5 +66,5 @@ const payments = await amora.scan(keys, fromBlock);
 ## Resources
 
 - [GitHub Repository](https://github.com/joaoolucas/amora-sdk)
-- [npm Package](https://www.npmjs.com/package/@amora/sdk)
+- [npm Package](https://www.npmjs.com/package/amora-sdk)
 - [Starkscan (Mainnet)](https://starkscan.co/contract/0x067e3fae136321be23894cc3a181c92171a7b991d853fa5e3432ec7dddeb955d)

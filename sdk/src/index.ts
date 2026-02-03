@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { Amora, generateKeys, encodeMetaAddress, parseMetaAddress } from '@amora/sdk';
+ * import { Amora, generateKeys, encodeMetaAddress, parseMetaAddress } from 'amora-sdk';
  *
  * // Initialize SDK
  * const amora = new Amora({ provider, amoraAddress, accountClassHash });

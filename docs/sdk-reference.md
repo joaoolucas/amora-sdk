@@ -5,7 +5,7 @@ Complete API documentation for the Amora SDK.
 ## Installation
 
 ```bash
-pnpm add @amora/sdk starknet
+pnpm add amora-sdk starknet
 ```
 
 ## Exports
@@ -57,7 +57,7 @@ import {
   // Contract addresses
   MAINNET_ADDRESSES,
   SEPOLIA_ADDRESSES,
-} from '@amora/sdk';
+} from 'amora-sdk';
 ```
 
 ---
@@ -83,7 +83,7 @@ new Amora(config: AmoraConfig)
 **Example:**
 
 ```typescript
-import { Amora, MAINNET_ADDRESSES } from '@amora/sdk';
+import { Amora, MAINNET_ADDRESSES } from 'amora-sdk';
 import { RpcProvider } from 'starknet';
 
 const amora = new Amora({

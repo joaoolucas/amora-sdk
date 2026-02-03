@@ -6,19 +6,19 @@ This guide will help you integrate Amora into your Starknet application.
 
 ```bash
 # Using pnpm (recommended)
-pnpm add @amora/sdk starknet
+pnpm add amora-sdk starknet
 
 # Using npm
-npm install @amora/sdk starknet
+npm install amora-sdk starknet
 
 # Using yarn
-yarn add @amora/sdk starknet
+yarn add amora-sdk starknet
 ```
 
 ## Basic Setup
 
 ```typescript
-import { Amora, MAINNET_ADDRESSES, SEPOLIA_ADDRESSES } from '@amora/sdk';
+import { Amora, MAINNET_ADDRESSES, SEPOLIA_ADDRESSES } from 'amora-sdk';
 import { RpcProvider, Account } from 'starknet';
 
 // Initialize provider
@@ -41,7 +41,7 @@ Recipients need to generate stealth keys and register them on-chain.
 ### 1. Generate Keys
 
 ```typescript
-import { generateKeys, encodeMetaAddress } from '@amora/sdk';
+import { generateKeys, encodeMetaAddress } from 'amora-sdk';
 
 // Generate spending and viewing keypairs
 const keys = generateKeys();
@@ -89,7 +89,7 @@ Senders use the recipient's meta-address to generate a unique stealth address.
 const meta = await amora.getMetaAddress(recipientAddress);
 
 // Option B: Parse from string
-import { parseMetaAddress } from '@amora/sdk';
+import { parseMetaAddress } from 'amora-sdk';
 const meta = parseMetaAddress('st:starknet:0x123...abc:0x456...def');
 ```
 
@@ -166,7 +166,7 @@ const exportedKeys = {
 ### Restoring Keys
 
 ```typescript
-import { keysFromPrivateKeys } from '@amora/sdk';
+import { keysFromPrivateKeys } from 'amora-sdk';
 
 const keys = keysFromPrivateKeys(
   BigInt('0x' + exportedKeys.spendingPrivateKey),
@@ -184,7 +184,7 @@ const viewingKey = keys.viewingKey.privateKey;
 const spendingPubKey = keys.spendingKey.publicKey;
 
 // Scanning with view-only access
-import { scanAnnouncements } from '@amora/sdk';
+import { scanAnnouncements } from 'amora-sdk';
 const announcements = await amora.fetchAnnouncements(fromBlock);
 const payments = scanAnnouncements(
   announcements,

@@ -1,5 +1,5 @@
 {
-  "name": "@amora/sdk",
+  "name": "amora-sdk",
   "version": "0.1.0",
   "description": "Stealth Addresses SDK for Starknet",
   "main": "dist/index.js",
