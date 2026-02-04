@@ -149,6 +149,98 @@ for (const payment of payments) {
 }
 ```
 
+## Batch Sending
+
+Send to multiple recipients in a single transaction:
+
+```typescript
+import { encodeMemo } from 'amora-sdk';
+
+const payments = [
+  { metaAddress: meta1, tokenAddress: ETH_ADDRESS, amount: 1000000n },
+  { metaAddress: meta2, tokenAddress: ETH_ADDRESS, amount: 2000000n },
+  { metaAddress: meta3, tokenAddress: ETH_ADDRESS, amount: 500000n },
+];
+
+const result = await amora.batchSend(account, payments);
+console.log('Batch tx:', result.transactionResponse.transaction_hash);
+console.log('Recipients:', result.stealthResults.length);
+```
+
+You can also build the calls without executing to inspect or combine with other calls:
+
+```typescript
+const { calls, stealthResults } = amora.buildBatchSendCalls(payments);
+// Combine with other calls or execute manually
+await account.execute([...otherCalls, ...calls]);
+```
+
+## Payment Links
+
+Generate shareable URIs that encode recipient info and optional payment details:
+
+```typescript
+import { generatePaymentLink, parsePaymentLink } from 'amora-sdk';
+
+// Generate a link
+const link = generatePaymentLink({
+  metaAddress,
+  tokenAddress: ETH_ADDRESS,
+  amount: 1000000n,
+  memo: 'Coffee payment',
+});
+// → "amora://pay?meta=st:starknet:0x...:0x...&token=0x...&amount=1000000&memo=Coffee%20payment"
+
+// Parse a received link
+const parsed = parsePaymentLink(link);
+const stealth = amora.generateStealthAddress(parsed.metaAddress);
+await amora.send(account, parsed.tokenAddress, parsed.amount, stealth);
+```
+
+## Memo Encoding
+
+Attach text messages to payments via the metadata field:
+
+```typescript
+import { encodeMemo, decodeMemo } from 'amora-sdk';
+
+// Encode a memo and send
+const memo = encodeMemo("Thanks for dinner!");
+const stealth = amora.generateStealthAddress(meta);
+await amora.send(account, ETH_ADDRESS, amount, stealth, memo);
+
+// Decode a memo from a received payment
+// metadata[0] = token address, metadata[1] = amount, rest = memo felts
+const memoText = decodeMemo(payment.announcement.metadata.slice(2));
+console.log('Memo:', memoText);
+```
+
+## Viewing Keys
+
+Export a watch-only key that allows scanning for payments without spending ability:
+
+```typescript
+import { exportViewingKey, importViewingKey, scanWithViewingKey } from 'amora-sdk';
+
+// Export viewing key (share with monitoring services)
+const vkString = exportViewingKey(keys);
+// → "vk:starknet:0x<viewing_private>:0x<spending_pub>"
+
+// Import and scan on another device/service
+const vk = importViewingKey(vkString);
+const announcements = await amora.fetchAnnouncements(fromBlock);
+const matches = scanWithViewingKey(
+  announcements,
+  vk,
+  MAINNET_ADDRESSES.stealthAccountClassHash
+);
+
+for (const match of matches) {
+  console.log('Payment to:', match.announcement.stealthAddress);
+  // Note: cannot derive spending key — watch-only
+}
+```
+
 ## Key Management
 
 ### Storing Keys
@@ -176,23 +268,19 @@ const keys = keysFromPrivateKeys(
 
 ### View-Only Access
 
-Share viewing keys with services that need to monitor incoming payments:
+Export and share viewing keys with services that need to monitor incoming payments:
 
 ```typescript
-// Service can scan without spending ability
-const viewingKey = keys.viewingKey.privateKey;
-const spendingPubKey = keys.spendingKey.publicKey;
+import { exportViewingKey, importViewingKey, scanWithViewingKey } from 'amora-sdk';
 
-// Scanning with view-only access
-import { scanAnnouncements } from 'amora-sdk';
+// Export a viewing key string (safe to share with monitoring services)
+const vkString = exportViewingKey(keys);
+
+// On the monitoring service: import and scan
+const vk = importViewingKey(vkString);
 const announcements = await amora.fetchAnnouncements(fromBlock);
-const payments = scanAnnouncements(
-  announcements,
-  viewingKey,
-  spendingPubKey,
-  null, // No spending private key
-  accountClassHash
-);
+const matches = scanWithViewingKey(announcements, vk, accountClassHash);
+// matches contain stealth addresses and shared secrets, but no spending keys
 ```
 
 ## Error Handling

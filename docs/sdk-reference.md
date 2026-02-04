@@ -15,6 +15,8 @@ import {
   // Main SDK class
   Amora,
   AmoraConfig,
+  BatchPayment,
+  BatchSendResult,
 
   // Key management
   generateKeys,
@@ -53,6 +55,25 @@ import {
   ecdh,
   poseidonHash,
   computeViewTag,
+
+  // Memo encoding
+  encodeMemo,
+  decodeMemo,
+
+  // Payment links
+  generatePaymentLink,
+  parsePaymentLink,
+  isValidPaymentLink,
+  PaymentLinkParams,
+  ParsedPaymentLink,
+
+  // Viewing keys
+  exportViewingKey,
+  importViewingKey,
+  isValidViewingKey,
+  scanWithViewingKey,
+  ExportedViewingKey,
+  ViewingKeyMatch,
 
   // Contract addresses
   MAINNET_ADDRESSES,
@@ -259,6 +280,65 @@ async deployStealthAccount(
 
 ---
 
+#### `buildBatchSendCalls(payments)`
+
+Build calls for sending to multiple recipients in a single multicall.
+
+```typescript
+buildBatchSendCalls(payments: BatchPayment[]): {
+  calls: Call[];
+  stealthResults: GenerateStealthAddressResult[];
+}
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `payments` | `BatchPayment[]` | Array of payment descriptions |
+
+**Returns:** Object with flattened `calls` array and `stealthResults` for each payment
+
+---
+
+#### `batchSend(account, payments)`
+
+Send to multiple recipients in a single Starknet multicall.
+
+```typescript
+async batchSend(
+  account: Account,
+  payments: BatchPayment[]
+): Promise<BatchSendResult>
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `account` | `Account` | Sender's Starknet account |
+| `payments` | `BatchPayment[]` | Array of payment descriptions |
+
+**Returns:**
+
+```typescript
+interface BatchSendResult {
+  transactionResponse: InvokeFunctionResponse;
+  stealthResults: GenerateStealthAddressResult[];
+}
+```
+
+**Example:**
+
+```typescript
+const result = await amora.batchSend(account, [
+  { metaAddress: meta1, tokenAddress: ETH, amount: 1000n },
+  { metaAddress: meta2, tokenAddress: ETH, amount: 2000n },
+]);
+```
+
+---
+
 ### Properties
 
 | Property | Type | Description |
@@ -454,6 +534,177 @@ function computeViewTag(sharedSecret: bigint): number
 
 ---
 
+## Memo Encoding
+
+### `encodeMemo(memo)`
+
+Encode a UTF-8 string into an array of felt252 values for the metadata field.
+
+Each felt252 holds 31 bytes. The first felt is the byte length prefix.
+
+```typescript
+function encodeMemo(memo: string): bigint[]
+```
+
+**Example:**
+
+```typescript
+const felts = encodeMemo("Thanks for dinner!");
+// Use with send:
+await amora.send(account, token, amount, stealth, felts);
+```
+
+---
+
+### `decodeMemo(felts)`
+
+Decode felt252 array back into a UTF-8 string.
+
+```typescript
+function decodeMemo(felts: bigint[]): string
+```
+
+**Example:**
+
+```typescript
+// metadata[0]=token, metadata[1]=amount, rest=memo
+const memoText = decodeMemo(payment.announcement.metadata.slice(2));
+```
+
+---
+
+## Payment Links
+
+### `generatePaymentLink(params)`
+
+Generate a shareable `amora://` payment link URI.
+
+```typescript
+function generatePaymentLink(params: PaymentLinkParams): string
+```
+
+**Parameters:**
+
+```typescript
+interface PaymentLinkParams {
+  metaAddress: string;       // Recipient's meta-address (required)
+  tokenAddress?: string;     // Token contract address
+  amount?: bigint;           // Payment amount
+  memo?: string;             // Text memo
+}
+```
+
+**Returns:** URI string like `amora://pay?meta=st:starknet:0x...:0x...&token=0x...&amount=1000000&memo=hello`
+
+---
+
+### `parsePaymentLink(link)`
+
+Parse a payment link URI.
+
+```typescript
+function parsePaymentLink(link: string): ParsedPaymentLink
+```
+
+**Returns:**
+
+```typescript
+interface ParsedPaymentLink {
+  metaAddress: MetaAddress;    // Parsed meta-address
+  metaAddressRaw: string;      // Raw meta-address string
+  tokenAddress?: string;
+  amount?: bigint;
+  memo?: string;
+}
+```
+
+---
+
+### `isValidPaymentLink(link)`
+
+Check if a string is a valid payment link.
+
+```typescript
+function isValidPaymentLink(link: string): boolean
+```
+
+---
+
+## Viewing Keys
+
+### `exportViewingKey(keys)`
+
+Export a watch-only viewing key from stealth keys.
+
+```typescript
+function exportViewingKey(keys: StealthKeys): string
+// → "vk:starknet:0x<viewing_private_key>:0x<spending_public_key>"
+```
+
+---
+
+### `importViewingKey(viewingKeyStr)`
+
+Import a viewing key from its string representation.
+
+```typescript
+function importViewingKey(viewingKeyStr: string): ExportedViewingKey
+```
+
+**Returns:**
+
+```typescript
+interface ExportedViewingKey {
+  chain: string;                // "starknet"
+  viewingPrivateKey: bigint;    // Enables scanning
+  spendingPubKey: bigint;       // Enables address verification (not spending)
+}
+```
+
+---
+
+### `isValidViewingKey(viewingKeyStr)`
+
+Check if a string is a valid viewing key.
+
+```typescript
+function isValidViewingKey(viewingKeyStr: string): boolean
+```
+
+---
+
+### `scanWithViewingKey(announcements, viewingKey, accountClassHash)`
+
+Scan announcements using a viewing key (watch-only, cannot derive spending keys).
+
+```typescript
+function scanWithViewingKey(
+  announcements: Announcement[],
+  viewingKey: ExportedViewingKey,
+  accountClassHash: string
+): ViewingKeyMatch[]
+```
+
+**Returns:**
+
+```typescript
+interface ViewingKeyMatch {
+  announcement: Announcement;
+  sharedSecret: bigint;
+  stealthPubKey: bigint;
+}
+```
+
+**Example:**
+
+```typescript
+const vk = importViewingKey("vk:starknet:0x...:0x...");
+const announcements = await amora.fetchAnnouncements(fromBlock);
+const matches = scanWithViewingKey(announcements, vk, accountClassHash);
+```
+
+---
+
 ## Constants
 
 ### Contract Addresses
@@ -524,5 +775,44 @@ interface Announcement {
 
 interface StealthPayment extends Announcement {
   stealthPrivateKey: bigint;
+}
+
+interface BatchPayment {
+  metaAddress: string | MetaAddress;
+  tokenAddress: string;
+  amount: bigint;
+  metadata?: bigint[];
+}
+
+interface BatchSendResult {
+  transactionResponse: InvokeFunctionResponse;
+  stealthResults: GenerateStealthAddressResult[];
+}
+
+interface PaymentLinkParams {
+  metaAddress: string;
+  tokenAddress?: string;
+  amount?: bigint;
+  memo?: string;
+}
+
+interface ParsedPaymentLink {
+  metaAddress: MetaAddress;
+  metaAddressRaw: string;
+  tokenAddress?: string;
+  amount?: bigint;
+  memo?: string;
+}
+
+interface ExportedViewingKey {
+  chain: string;
+  viewingPrivateKey: bigint;
+  spendingPubKey: bigint;
+}
+
+interface ViewingKeyMatch {
+  announcement: Announcement;
+  sharedSecret: bigint;
+  stealthPubKey: bigint;
 }
 ```

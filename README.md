@@ -43,6 +43,10 @@ for (const payment of payments) {
 - **Private payments** - Send tokens without revealing recipient address on-chain
 - **One-time addresses** - Each payment uses a unique stealth address
 - **Efficient scanning** - View tags enable 256x faster payment detection
+- **Batch sends** - Send to multiple recipients in a single multicall
+- **Payment links** - Shareable `amora://` URIs with recipient and payment info
+- **Memo support** - Attach text messages to payments via felt252 encoding
+- **Viewing keys** - Export watch-only keys for scanning without spending ability
 - **Account abstraction** - SNIP-6 compliant smart contract wallets
 - **TypeScript** - Full type definitions included
 
@@ -153,6 +157,7 @@ amora.register(account, keys)              // Register meta-address
 amora.getMetaAddress(address)              // Fetch meta-address
 amora.generateStealthAddress(meta)         // Generate stealth address
 amora.send(account, token, amount, stealth) // Send tokens
+amora.batchSend(account, payments)         // Send to multiple recipients
 amora.scan(keys, fromBlock)                // Scan for payments
 amora.deployAndWithdraw(key, dest, token, amount) // Withdraw funds
 ```
@@ -164,6 +169,29 @@ generateKeys()                  // Generate new stealth keys
 keysFromPrivateKeys(s, v)       // Restore from private keys
 encodeMetaAddress(keys)         // Encode as string
 parseMetaAddress(str)           // Parse from string
+```
+
+### Payment Links
+
+```typescript
+generatePaymentLink({ metaAddress, tokenAddress?, amount?, memo? })
+parsePaymentLink(link)          // Parse amora:// URI
+isValidPaymentLink(link)        // Validate URI
+```
+
+### Memo Encoding
+
+```typescript
+encodeMemo(text)                // Encode UTF-8 string to felt252[]
+decodeMemo(felts)               // Decode felt252[] back to string
+```
+
+### Viewing Keys
+
+```typescript
+exportViewingKey(keys)          // Export watch-only key string
+importViewingKey(str)           // Import from string
+scanWithViewingKey(announcements, viewingKey, classHash)
 ```
 
 ### Low-Level Functions
