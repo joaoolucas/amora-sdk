@@ -111,6 +111,30 @@ export interface AmoraConfig {
 }
 
 /**
+ * A single payment in a batch send operation
+ */
+export interface BatchPayment {
+  /** Recipient's meta-address (string or parsed) */
+  metaAddress: string | MetaAddress;
+  /** Token contract address to send */
+  tokenAddress: string;
+  /** Amount to send */
+  amount: bigint;
+  /** Optional additional metadata */
+  metadata?: bigint[];
+}
+
+/**
+ * Result of a batch send operation
+ */
+export interface BatchSendResult {
+  /** The transaction response from the multicall */
+  transactionResponse: InvokeFunctionResponse;
+  /** The stealth address results for each payment */
+  stealthResults: GenerateStealthAddressResult[];
+}
+
+/**
  * Main Amora SDK class for interacting with stealth addresses
  */
 export class Amora {
@@ -473,6 +497,49 @@ export class Amora {
     };
 
     return stealthAccount.deployAccount(payload);
+  }
+
+  /**
+   * Build calls for sending to multiple recipients in a single multicall
+   * @param payments - Array of batch payment descriptions
+   * @returns The flattened calls and corresponding stealth results
+   */
+  buildBatchSendCalls(payments: BatchPayment[]): {
+    calls: Call[];
+    stealthResults: GenerateStealthAddressResult[];
+  } {
+    const allCalls: Call[] = [];
+    const stealthResults: GenerateStealthAddressResult[] = [];
+
+    for (const payment of payments) {
+      const stealthResult = this.generateStealthAddress(payment.metaAddress);
+      stealthResults.push(stealthResult);
+
+      const calls = this.buildSendCalls(
+        payment.tokenAddress,
+        payment.amount,
+        stealthResult,
+        payment.metadata
+      );
+      allCalls.push(...calls);
+    }
+
+    return { calls: allCalls, stealthResults };
+  }
+
+  /**
+   * Send to multiple recipients in a single Starknet multicall
+   * @param account - The sender's account
+   * @param payments - Array of batch payment descriptions
+   * @returns The transaction response and stealth results
+   */
+  async batchSend(
+    account: Account,
+    payments: BatchPayment[]
+  ): Promise<BatchSendResult> {
+    const { calls, stealthResults } = this.buildBatchSendCalls(payments);
+    const transactionResponse = await account.execute(calls);
+    return { transactionResponse, stealthResults };
   }
 
   /**

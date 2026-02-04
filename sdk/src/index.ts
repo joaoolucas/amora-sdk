@@ -32,7 +32,12 @@
  */
 
 // Main SDK class
-export { Amora, type AmoraConfig } from "./contracts";
+export {
+  Amora,
+  type AmoraConfig,
+  type BatchPayment,
+  type BatchSendResult,
+} from "./contracts";
 
 // Key generation
 export {
@@ -79,6 +84,28 @@ export {
   poseidonHash,
   computeViewTag,
 } from "./crypto";
+
+// Memo encoding/decoding
+export { encodeMemo, decodeMemo } from "./memo";
+
+// Payment links
+export {
+  generatePaymentLink,
+  parsePaymentLink,
+  isValidPaymentLink,
+  type PaymentLinkParams,
+  type ParsedPaymentLink,
+} from "./payment-link";
+
+// Viewing key export/import
+export {
+  exportViewingKey,
+  importViewingKey,
+  isValidViewingKey,
+  scanWithViewingKey,
+  type ExportedViewingKey,
+  type ViewingKeyMatch,
+} from "./viewing-key";
 
 // Deployed contract addresses
 export const MAINNET_ADDRESSES = {

@@ -590,6 +590,38 @@ var Amora = class {
     return stealthAccount.deployAccount(payload);
   }
   /**
+   * Build calls for sending to multiple recipients in a single multicall
+   * @param payments - Array of batch payment descriptions
+   * @returns The flattened calls and corresponding stealth results
+   */
+  buildBatchSendCalls(payments) {
+    const allCalls = [];
+    const stealthResults = [];
+    for (const payment of payments) {
+      const stealthResult = this.generateStealthAddress(payment.metaAddress);
+      stealthResults.push(stealthResult);
+      const calls = this.buildSendCalls(
+        payment.tokenAddress,
+        payment.amount,
+        stealthResult,
+        payment.metadata
+      );
+      allCalls.push(...calls);
+    }
+    return { calls: allCalls, stealthResults };
+  }
+  /**
+   * Send to multiple recipients in a single Starknet multicall
+   * @param account - The sender's account
+   * @param payments - Array of batch payment descriptions
+   * @returns The transaction response and stealth results
+   */
+  async batchSend(account, payments) {
+    const { calls, stealthResults } = this.buildBatchSendCalls(payments);
+    const transactionResponse = await account.execute(calls);
+    return { transactionResponse, stealthResults };
+  }
+  /**
    * Get the Amora registry contract address
    */
   get registryAddress() {
@@ -626,6 +658,189 @@ function keysFromPrivateKeys(spendingPrivateKey, viewingPrivateKey) {
   };
 }
 
+// src/memo.ts
+var BYTES_PER_FELT = 31;
+function encodeMemo(memo) {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(memo);
+  if (bytes.length === 0) {
+    return [0n];
+  }
+  const felts = [BigInt(bytes.length)];
+  for (let i = 0; i < bytes.length; i += BYTES_PER_FELT) {
+    const chunk = bytes.slice(i, i + BYTES_PER_FELT);
+    let value = 0n;
+    for (const byte of chunk) {
+      value = value << 8n | BigInt(byte);
+    }
+    felts.push(value);
+  }
+  return felts;
+}
+function decodeMemo(felts) {
+  if (felts.length === 0) {
+    throw new Error("Cannot decode memo: empty felts array");
+  }
+  const totalBytes = Number(felts[0]);
+  if (totalBytes === 0) {
+    return "";
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let bytesWritten = 0;
+  for (let i = 1; i < felts.length && bytesWritten < totalBytes; i++) {
+    const remaining = totalBytes - bytesWritten;
+    const chunkSize = Math.min(BYTES_PER_FELT, remaining);
+    const value = felts[i];
+    for (let j = chunkSize - 1; j >= 0; j--) {
+      bytes[bytesWritten + j] = Number(value >> BigInt((chunkSize - 1 - j) * 8) & 0xffn);
+    }
+    bytesWritten += chunkSize;
+  }
+  const decoder = new TextDecoder();
+  return decoder.decode(bytes);
+}
+
+// src/payment-link.ts
+var PAYMENT_LINK_SCHEME = "amora";
+var PAYMENT_LINK_HOST = "pay";
+function generatePaymentLink(params) {
+  if (!isValidMetaAddress(params.metaAddress)) {
+    throw new Error("Invalid meta-address");
+  }
+  const queryParts = [`meta=${encodeURIComponent(params.metaAddress)}`];
+  if (params.tokenAddress !== void 0) {
+    queryParts.push(`token=${encodeURIComponent(params.tokenAddress)}`);
+  }
+  if (params.amount !== void 0) {
+    queryParts.push(`amount=${params.amount.toString()}`);
+  }
+  if (params.memo !== void 0) {
+    queryParts.push(`memo=${encodeURIComponent(params.memo)}`);
+  }
+  return `${PAYMENT_LINK_SCHEME}://${PAYMENT_LINK_HOST}?${queryParts.join("&")}`;
+}
+function parsePaymentLink(link) {
+  const schemePrefix = `${PAYMENT_LINK_SCHEME}://${PAYMENT_LINK_HOST}?`;
+  if (!link.startsWith(schemePrefix)) {
+    throw new Error(`Invalid payment link: must start with "${schemePrefix}"`);
+  }
+  const queryString = link.slice(schemePrefix.length);
+  const params = new URLSearchParams(queryString);
+  const metaRaw = params.get("meta");
+  if (!metaRaw) {
+    throw new Error("Invalid payment link: missing meta-address");
+  }
+  const metaAddressRaw = decodeURIComponent(metaRaw);
+  const metaAddress = parseMetaAddress(metaAddressRaw);
+  const result = {
+    metaAddress,
+    metaAddressRaw
+  };
+  const token = params.get("token");
+  if (token) {
+    result.tokenAddress = decodeURIComponent(token);
+  }
+  const amount = params.get("amount");
+  if (amount) {
+    result.amount = BigInt(amount);
+  }
+  const memo = params.get("memo");
+  if (memo) {
+    result.memo = decodeURIComponent(memo);
+  }
+  return result;
+}
+function isValidPaymentLink(link) {
+  try {
+    parsePaymentLink(link);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/viewing-key.ts
+var VIEWING_KEY_PREFIX = "vk";
+var VIEWING_KEY_CHAIN = "starknet";
+function exportViewingKey(keys) {
+  const viewingHex = "0x" + keys.viewingKey.privateKey.toString(16);
+  const spendingHex = "0x" + keys.spendingKey.publicKey.toString(16);
+  return `${VIEWING_KEY_PREFIX}:${VIEWING_KEY_CHAIN}:${viewingHex}:${spendingHex}`;
+}
+function importViewingKey(viewingKeyStr) {
+  const parts = viewingKeyStr.split(":");
+  if (parts.length !== 4) {
+    throw new Error(
+      `Invalid viewing key format: expected 4 parts, got ${parts.length}`
+    );
+  }
+  const [prefix, chain, viewingStr, spendingStr] = parts;
+  if (prefix !== VIEWING_KEY_PREFIX) {
+    throw new Error(
+      `Invalid viewing key prefix: expected "${VIEWING_KEY_PREFIX}", got "${prefix}"`
+    );
+  }
+  if (chain !== VIEWING_KEY_CHAIN) {
+    throw new Error(
+      `Invalid viewing key chain: expected "${VIEWING_KEY_CHAIN}", got "${chain}"`
+    );
+  }
+  const viewingPrivateKey = BigInt(viewingStr);
+  const spendingPubKey = BigInt(spendingStr);
+  if (viewingPrivateKey <= 0n) {
+    throw new Error("Invalid viewing key: viewing private key must be positive");
+  }
+  if (spendingPubKey <= 0n) {
+    throw new Error("Invalid viewing key: spending public key must be positive");
+  }
+  return {
+    chain,
+    viewingPrivateKey,
+    spendingPubKey
+  };
+}
+function isValidViewingKey(viewingKeyStr) {
+  try {
+    importViewingKey(viewingKeyStr);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function scanWithViewingKey(announcements, viewingKey, accountClassHash) {
+  const matches = [];
+  for (const announcement of announcements) {
+    const sharedSecret = ecdh(viewingKey.viewingPrivateKey, announcement.ephemeralPubKey);
+    const expectedViewTag = computeViewTag(sharedSecret);
+    if (expectedViewTag !== announcement.viewTag) {
+      continue;
+    }
+    const stealthPubKey = computeStealthPublicKey(
+      viewingKey.spendingPubKey,
+      sharedSecret
+    );
+    const expectedAddress = computeStealthContractAddress(
+      stealthPubKey,
+      accountClassHash
+    );
+    const normalizedExpected = normalizeAddress2(expectedAddress);
+    const normalizedActual = normalizeAddress2(announcement.stealthAddress);
+    if (normalizedExpected !== normalizedActual) {
+      continue;
+    }
+    matches.push({
+      announcement,
+      sharedSecret,
+      stealthPubKey
+    });
+  }
+  return matches;
+}
+function normalizeAddress2(address) {
+  const hex = address.toLowerCase().replace(/^0x0*/, "");
+  return "0x" + hex;
+}
+
 // src/index.ts
 var MAINNET_ADDRESSES = {
   amoraRegistry: "0x067e3fae136321be23894cc3a181c92171a7b991d853fa5e3432ec7dddeb955d",
@@ -647,20 +862,29 @@ export {
   computeStealthContractAddress,
   computeStealthPrivateKey2 as computeStealthPrivateKey,
   computeViewTag,
+  decodeMemo,
   derivePublicKey,
   ecdh,
+  encodeMemo,
   encodeMetaAddress,
   encodeMetaAddressFromPubKeys,
+  exportViewingKey,
   generateKeyPair,
   generateKeys,
+  generatePaymentLink,
   generatePrivateKey,
   generateStealthAddress,
   generateStealthAddressWithKey,
+  importViewingKey,
   isValidMetaAddress,
+  isValidPaymentLink,
+  isValidViewingKey,
   keyPairFromPrivateKey,
   keysFromPrivateKeys,
   parseMetaAddress,
+  parsePaymentLink,
   poseidonHash,
   scanAnnouncements,
+  scanWithViewingKey,
   verifyAndComputeStealthKey
 };

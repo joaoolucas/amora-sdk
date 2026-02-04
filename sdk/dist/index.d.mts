@@ -221,6 +221,28 @@ interface AmoraConfig {
     accountClassHash: string;
 }
 /**
+ * A single payment in a batch send operation
+ */
+interface BatchPayment {
+    /** Recipient's meta-address (string or parsed) */
+    metaAddress: string | MetaAddress;
+    /** Token contract address to send */
+    tokenAddress: string;
+    /** Amount to send */
+    amount: bigint;
+    /** Optional additional metadata */
+    metadata?: bigint[];
+}
+/**
+ * Result of a batch send operation
+ */
+interface BatchSendResult {
+    /** The transaction response from the multicall */
+    transactionResponse: InvokeFunctionResponse;
+    /** The stealth address results for each payment */
+    stealthResults: GenerateStealthAddressResult[];
+}
+/**
  * Main Amora SDK class for interacting with stealth addresses
  */
 declare class Amora {
@@ -310,6 +332,22 @@ declare class Amora {
      */
     deployStealthAccount(privateKey: bigint, publicKey?: bigint): Promise<DeployContractResponse>;
     /**
+     * Build calls for sending to multiple recipients in a single multicall
+     * @param payments - Array of batch payment descriptions
+     * @returns The flattened calls and corresponding stealth results
+     */
+    buildBatchSendCalls(payments: BatchPayment[]): {
+        calls: Call[];
+        stealthResults: GenerateStealthAddressResult[];
+    };
+    /**
+     * Send to multiple recipients in a single Starknet multicall
+     * @param account - The sender's account
+     * @param payments - Array of batch payment descriptions
+     * @returns The transaction response and stealth results
+     */
+    batchSend(account: Account, payments: BatchPayment[]): Promise<BatchSendResult>;
+    /**
      * Get the Amora registry contract address
      */
     get registryAddress(): string;
@@ -364,6 +402,159 @@ declare function computeViewTag(sharedSecret: bigint): number;
 declare function ecdh(privateKey: bigint, publicKey: bigint): bigint;
 
 /**
+ * Memo encoding/decoding for stealth payment metadata
+ *
+ * Encodes UTF-8 text into felt252 array for the existing metadata field.
+ * Each felt252 holds 31 bytes. The first felt is the byte length prefix.
+ */
+/**
+ * Encode a UTF-8 string into an array of felt252 values
+ *
+ * Encoding scheme:
+ * 1. Convert string to UTF-8 bytes
+ * 2. First felt252 = total byte length
+ * 3. Subsequent felts = 31-byte chunks packed big-endian into bigints
+ *
+ * @param memo - The text to encode
+ * @returns Array of bigints representing the memo as felt252 values
+ */
+declare function encodeMemo(memo: string): bigint[];
+/**
+ * Decode an array of felt252 values back into a UTF-8 string
+ *
+ * @param felts - Array of bigints where felts[0] is byte length and
+ *                subsequent felts are 31-byte big-endian chunks
+ * @returns The decoded string
+ * @throws If the felts array is empty
+ */
+declare function decodeMemo(felts: bigint[]): string;
+
+/**
+ * Payment link generation and parsing
+ *
+ * Generates shareable URIs encoding recipient meta-address + optional payment params.
+ * URI format: amora://pay?meta=st:starknet:0x...:0x...&token=0x...&amount=1000000&memo=hello
+ */
+
+/**
+ * Parameters for generating a payment link
+ */
+interface PaymentLinkParams {
+    /** The recipient's meta-address string */
+    metaAddress: string;
+    /** Optional token contract address */
+    tokenAddress?: string;
+    /** Optional payment amount */
+    amount?: bigint;
+    /** Optional memo text */
+    memo?: string;
+}
+/**
+ * A parsed payment link
+ */
+interface ParsedPaymentLink {
+    /** The parsed meta-address */
+    metaAddress: MetaAddress;
+    /** The raw meta-address string */
+    metaAddressRaw: string;
+    /** Optional token contract address */
+    tokenAddress?: string;
+    /** Optional payment amount */
+    amount?: bigint;
+    /** Optional memo text */
+    memo?: string;
+}
+/**
+ * Generate a shareable payment link URI
+ *
+ * @param params - Payment link parameters
+ * @returns The encoded payment link URI
+ * @throws If the meta-address is invalid
+ */
+declare function generatePaymentLink(params: PaymentLinkParams): string;
+/**
+ * Parse a payment link URI
+ *
+ * @param link - The payment link URI to parse
+ * @returns The parsed payment link data
+ * @throws If the link format is invalid or contains an invalid meta-address
+ */
+declare function parsePaymentLink(link: string): ParsedPaymentLink;
+/**
+ * Check if a string is a valid payment link
+ *
+ * @param link - The string to validate
+ * @returns true if the string is a valid payment link
+ */
+declare function isValidPaymentLink(link: string): boolean;
+
+/**
+ * Viewing key export/import for watch-only scanning
+ *
+ * Exports the viewing private key + spending public key so a watch-only
+ * client can detect incoming payments without being able to spend them.
+ *
+ * Format: vk:starknet:0x<viewing_private_key>:0x<spending_public_key>
+ */
+
+/**
+ * An exported viewing key containing the minimal info for watch-only scanning
+ */
+interface ExportedViewingKey {
+    /** Chain identifier */
+    chain: string;
+    /** The viewing private key (enables scanning) */
+    viewingPrivateKey: bigint;
+    /** The spending public key (enables address verification, but not spending) */
+    spendingPubKey: bigint;
+}
+/**
+ * A match found during viewing key scanning
+ */
+interface ViewingKeyMatch {
+    /** The matched announcement */
+    announcement: Announcement;
+    /** The shared secret derived from the ephemeral key */
+    sharedSecret: bigint;
+    /** The stealth public key for this payment */
+    stealthPubKey: bigint;
+}
+/**
+ * Export a viewing key from stealth keys
+ *
+ * @param keys - The full stealth keys
+ * @returns The viewing key string in format "vk:starknet:0x<viewing_priv>:0x<spending_pub>"
+ */
+declare function exportViewingKey(keys: StealthKeys): string;
+/**
+ * Import a viewing key from its string representation
+ *
+ * @param viewingKeyStr - The viewing key string
+ * @returns The parsed viewing key
+ * @throws If the format is invalid
+ */
+declare function importViewingKey(viewingKeyStr: string): ExportedViewingKey;
+/**
+ * Check if a string is a valid viewing key
+ *
+ * @param viewingKeyStr - The string to validate
+ * @returns true if valid
+ */
+declare function isValidViewingKey(viewingKeyStr: string): boolean;
+/**
+ * Scan announcements using a viewing key (watch-only, cannot derive spending keys)
+ *
+ * Uses the same ECDH + view tag + stealth address verification as full scanning,
+ * but omits stealth private key derivation since the spending private key is not available.
+ *
+ * @param announcements - Array of announcements to scan
+ * @param viewingKey - The exported viewing key
+ * @param accountClassHash - The class hash of the stealth account contract
+ * @returns Array of matched announcements with shared secrets
+ */
+declare function scanWithViewingKey(announcements: Announcement[], viewingKey: ExportedViewingKey, accountClassHash: string): ViewingKeyMatch[];
+
+/**
  * Amora SDK - Stealth Addresses for Starknet
  *
  * This SDK implements ERC-5564/ERC-6538-style stealth addresses
@@ -405,4 +596,4 @@ declare const SEPOLIA_ADDRESSES: {
     readonly stealthAccountClassHash: "0x0155bf2341cbc5a8e612ece29cc87476d7a0e102ea197a4583833a5b8a2fa76a";
 };
 
-export { Amora, type AmoraConfig, type Announcement, CHAIN_ID, CURVE_ORDER, type GenerateStealthAddressResult, type KeyPair, MAINNET_ADDRESSES, META_ADDRESS_PREFIX, type MetaAddress, SCHEME_ID_STARK, SEPOLIA_ADDRESSES, type StealthKeys, type StealthPayment, checkAnnouncementViewTag, computeStealthContractAddress, computeStealthPrivateKey, computeViewTag, derivePublicKey, ecdh, encodeMetaAddress, encodeMetaAddressFromPubKeys, generateKeyPair, generateKeys, generatePrivateKey, generateStealthAddress, generateStealthAddressWithKey, isValidMetaAddress, keyPairFromPrivateKey, keysFromPrivateKeys, parseMetaAddress, poseidonHash, scanAnnouncements, verifyAndComputeStealthKey };
+export { Amora, type AmoraConfig, type Announcement, type BatchPayment, type BatchSendResult, CHAIN_ID, CURVE_ORDER, type ExportedViewingKey, type GenerateStealthAddressResult, type KeyPair, MAINNET_ADDRESSES, META_ADDRESS_PREFIX, type MetaAddress, type ParsedPaymentLink, type PaymentLinkParams, SCHEME_ID_STARK, SEPOLIA_ADDRESSES, type StealthKeys, type StealthPayment, type ViewingKeyMatch, checkAnnouncementViewTag, computeStealthContractAddress, computeStealthPrivateKey, computeViewTag, decodeMemo, derivePublicKey, ecdh, encodeMemo, encodeMetaAddress, encodeMetaAddressFromPubKeys, exportViewingKey, generateKeyPair, generateKeys, generatePaymentLink, generatePrivateKey, generateStealthAddress, generateStealthAddressWithKey, importViewingKey, isValidMetaAddress, isValidPaymentLink, isValidViewingKey, keyPairFromPrivateKey, keysFromPrivateKeys, parseMetaAddress, parsePaymentLink, poseidonHash, scanAnnouncements, scanWithViewingKey, verifyAndComputeStealthKey };
